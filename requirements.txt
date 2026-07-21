@@ -1,0 +1,22 @@
+# --- Agent orchestration ---
+langgraph>=0.2.60
+langchain-core>=0.3.25
+
+# --- LLM provider ---
+anthropic>=0.40.0
+
+# --- API layer ---
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# --- Persistence ---
+SQLAlchemy>=2.0.36
+
+# --- Config / utils ---
+pydantic>=2.9.0
+pydantic-settings>=2.6.0
+python-dotenv>=1.0.1
+httpx>=0.27.0
+
+# --- Dev / test ---
+pytest>=8.3.0

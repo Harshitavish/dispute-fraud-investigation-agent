@@ -1,0 +1,644 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dispute Investigation Console</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel-2: #1c2333; --border: #2a3441;
+    --text: #e6edf3; --muted: #8b98a5; --dim: #6a7682;
+    --low: #2ea043; --medium: #d29922; --high: #f85149;
+    --accent: #3b82f6; --accent-dim: #1e3a5f;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 14px 22px; border-bottom: 1px solid var(--border); background: var(--panel);
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  header .sub { color: var(--dim); font-size: 12px; }
+  .spacer { flex: 1; }
+  .pill {
+    font-family: var(--mono); font-size: 11px; padding: 3px 9px; border-radius: 99px;
+    border: 1px solid var(--border); color: var(--muted); background: var(--panel-2);
+  }
+  .pill.on { color: var(--low); border-color: #1a4029; }
+  .pill.off { color: var(--medium); border-color: #3d3011; }
+
+  /* view toggle */
+  .toggle { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .toggle button {
+    border: 0; border-radius: 0; background: var(--panel-2); color: var(--muted);
+    padding: 6px 14px; font-size: 12.5px; cursor: pointer;
+  }
+  .toggle button.on { background: var(--accent); color: #fff; }
+
+  main { display: grid; grid-template-columns: 340px 1fr; min-height: calc(100vh - 53px); }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+
+  #list { border-right: 1px solid var(--border); padding: 16px; background: var(--panel); }
+  #detail { padding: 22px 26px; overflow-x: hidden; }
+
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .9px;
+       color: var(--dim); margin: 0 0 12px; font-weight: 600; }
+
+  .case {
+    border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+    margin-bottom: 9px; cursor: pointer; background: var(--panel-2); transition: .13s;
+  }
+  .case:hover { border-color: var(--accent); }
+  .case.active { border-color: var(--accent); background: var(--accent-dim); }
+  .case .id { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+  .case .who { font-size: 13px; font-weight: 600; }
+  .case .meta { color: var(--muted); font-size: 12px; margin-top: 3px; }
+  .case .amt { font-family: var(--mono); color: var(--text); }
+
+  .badge {
+    display: inline-block; font-size: 10px; font-family: var(--mono);
+    padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: .5px;
+  }
+  .badge.open { background: #1f2937; color: var(--muted); }
+  .badge.awaiting_human { background: #3d3011; color: var(--medium); }
+  .badge.resolved_refunded { background: #1a4029; color: var(--low); }
+  .badge.resolved_rejected { background: #3d1518; color: var(--high); }
+
+  button {
+    font: inherit; font-size: 13px; padding: 8px 15px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+    cursor: pointer; transition: .13s;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { background: #3d1518; border-color: #6b2329; color: #ff9d99; }
+  button.go { width: 100%; margin-top: 12px; }
+  button.big { font-size: 14.5px; padding: 12px 20px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px; margin-bottom: 16px;
+  }
+
+  /* ---------- SIMPLE VIEW ---------- */
+  .simple { max-width: 780px; }
+  .simple .card { padding: 22px 24px; }
+  .simple h3 {
+    margin: 0 0 14px; font-size: 15px; font-weight: 600; color: var(--text);
+  }
+  .verdict-hero { display: flex; gap: 20px; align-items: flex-start; }
+  .lamp {
+    width: 58px; height: 58px; border-radius: 50%; flex: 0 0 58px;
+    display: grid; place-items: center; font-size: 27px;
+  }
+  .lamp.LOW { background: #12301c; box-shadow: 0 0 0 3px #1a4029; }
+  .lamp.MEDIUM { background: #302610; box-shadow: 0 0 0 3px #4a3a12; }
+  .lamp.HIGH { background: #33161a; box-shadow: 0 0 0 3px #5c2126; }
+  .verdict-hero .headline { font-size: 21px; font-weight: 650; line-height: 1.3; }
+  .verdict-hero .because { color: var(--muted); font-size: 14.5px; margin-top: 7px; }
+
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+  .fact .lbl { color: var(--dim); font-size: 12px; }
+  .fact .val { font-size: 15px; font-weight: 600; margin-top: 2px; }
+
+  blockquote {
+    margin: 0; padding: 14px 16px; background: var(--panel-2);
+    border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0;
+    font-size: 14.5px; font-style: italic; color: var(--text);
+  }
+  blockquote .by { display: block; font-style: normal; font-size: 12.5px;
+                   color: var(--dim); margin-top: 8px; }
+
+  .check { display: flex; gap: 13px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .check:last-child { border-bottom: 0; }
+  .check .ic { font-size: 17px; flex: 0 0 22px; line-height: 1.3; }
+  .check.bad .ic { color: var(--high); }
+  .check .tx { font-size: 14.5px; }
+  .allclear { color: var(--low); font-size: 14.5px; display: flex; gap: 12px; align-items: center; }
+  .passed { color: var(--dim); font-size: 13px; margin-top: 14px; }
+
+  .flow { display: flex; flex-direction: column; gap: 2px; }
+  .who-did { display: flex; gap: 14px; padding: 11px 0; align-items: flex-start; }
+  .who-did .num {
+    flex: 0 0 24px; height: 24px; border-radius: 50%; background: var(--panel-2);
+    color: var(--muted); font-size: 12px; display: grid; place-items: center;
+    font-family: var(--mono);
+  }
+  .who-did.human .num { background: var(--accent-dim); color: #93c5fd; }
+  .who-did .role { font-weight: 600; font-size: 14px; }
+  .who-did .act { color: var(--muted); font-size: 13.5px; margin-top: 1px; }
+
+  .outcome { display: flex; gap: 13px; align-items: flex-start; padding: 11px 0; }
+  .outcome .ic { font-size: 17px; flex: 0 0 22px; }
+  .outcome .tx { font-size: 14.5px; }
+  .outcome .tx small { display: block; color: var(--dim); font-size: 12.5px; margin-top: 2px; }
+
+  .note { color: var(--dim); font-size: 12.5px; margin-top: 16px; line-height: 1.6; }
+
+  /* ---------- TECHNICAL VIEW ---------- */
+  .score-row { display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
+  .score { font-size: 46px; font-weight: 700; font-family: var(--mono); line-height: 1; }
+  .score small { font-size: 15px; color: var(--dim); font-weight: 400; }
+  .LOW { color: var(--low); } .MEDIUM { color: var(--medium); } .HIGH { color: var(--high); }
+  .bar { flex: 1; min-width: 220px; }
+  .track { height: 9px; background: var(--panel-2); border-radius: 99px; overflow: hidden; }
+  .fill { height: 100%; border-radius: 99px; transition: width .5s ease; }
+  .fill.LOW { background: var(--low); } .fill.MEDIUM { background: var(--medium); }
+  .fill.HIGH { background: var(--high); }
+  .marks { display: flex; justify-content: space-between; font-family: var(--mono);
+           font-size: 10px; color: var(--dim); margin-top: 5px; }
+  .verdict { font-family: var(--mono); font-size: 17px; font-weight: 600; }
+  .kv { color: var(--muted); font-size: 12px; margin-top: 4px; }
+
+  ul.plain { list-style: none; padding: 0; margin: 0; }
+  ul.plain li { padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  ul.plain li:last-child { border-bottom: 0; }
+
+  .sig { display: flex; align-items: baseline; gap: 10px; }
+  .sig .nm { font-family: var(--mono); font-size: 12px; }
+  .sig .wt { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-left: auto; }
+  .sig.hit .nm { color: var(--high); }
+  .sig.miss { opacity: .38; }
+  .sig .why { color: var(--muted); font-size: 12px; display: block; margin-top: 2px; }
+
+  .quote { border-left: 2px solid var(--accent); padding-left: 13px; }
+  .dissent { border-left: 2px solid var(--medium); padding-left: 13px;
+             color: var(--muted); font-size: 13px; margin-top: 12px; }
+
+  .step { display: flex; gap: 11px; padding: 6px 0; font-size: 12.5px; }
+  .step .n { font-family: var(--mono); color: var(--dim); width: 22px; text-align: right; }
+  .step .ag { font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 4px;
+              background: var(--panel-2); color: var(--muted); white-space: nowrap; }
+  .step .ag.action { background: #3d3011; color: var(--medium); }
+  .step .ag.human { background: var(--accent-dim); color: #93c5fd; }
+  .step .tl { color: var(--dim); font-family: var(--mono); font-size: 11px; }
+
+  /* shared */
+  .review { border-color: var(--medium); background: #1d1810; }
+  textarea {
+    width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 7px; padding: 10px; font: inherit; font-size: 13.5px; resize: vertical;
+    min-height: 62px; margin: 10px 0;
+  }
+  .row { display: flex; gap: 9px; flex-wrap: wrap; }
+
+  .mail { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+          padding: 14px; margin-bottom: 10px; }
+  .mail .to { font-size: 12.5px; color: var(--dim); }
+  .mail .sj { font-weight: 600; font-size: 14px; margin: 4px 0 8px; }
+  .mail pre { margin: 0; white-space: pre-wrap; font: inherit; font-size: 13.5px;
+              color: var(--muted); max-height: 190px; overflow-y: auto; }
+
+  .empty { color: var(--dim); text-align: center; padding: 90px 20px; }
+  .empty .big { font-size: 42px; opacity: .3; }
+  .spin { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--border);
+          border-top-color: var(--accent); border-radius: 50%; animation: r .7s linear infinite; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  .err { color: var(--high); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Dispute Investigation Console</h1>
+  <span class="sub">multi-agent &middot; LangGraph</span>
+  <span class="spacer"></span>
+  <div class="toggle">
+    <button id="btn-simple">Simple</button>
+    <button id="btn-tech">Technical</button>
+  </div>
+  <span class="pill" id="llm">llm &middot; ...</span>
+  <span class="pill" id="mail">mail &middot; ...</span>
+</header>
+
+<main>
+  <section id="list">
+    <h2>Complaints waiting</h2>
+    <div id="cases"></div>
+    <button class="go" id="refresh">Refresh</button>
+  </section>
+
+  <section id="detail">
+    <div class="empty">
+      <div class="big">&#9878;</div>
+      <p>Pick a complaint on the left to investigate it.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = async (path, opts) => {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+};
+const esc = s => String(s ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+let selected = null;
+let lastResult = null;
+let mode = localStorage.getItem("view") || "simple";
+
+/* --------------------------------------------------------------------------
+   Plain-language dictionaries.
+
+   The API speaks in signal names and enums. A non-technical reader should
+   never see either. Everything below translates the machine vocabulary into
+   sentences a customer-support lead or a recruiter can read without help.
+   -------------------------------------------------------------------------- */
+
+const PLAIN_SIGNAL = {
+  anonymised_network:
+    "The payment came through software that hides where the person really is — like a digital mask.",
+  ip_abuse_reputation:
+    "This internet connection has been reported for scams before.",
+  geo_mismatch:
+    "The payment came from a country this customer has never bought from before.",
+  unrecognised_device:
+    "This was a phone or computer we have never seen on this account.",
+  velocity_spike:
+    "Several payments were made within minutes of each other — a common sign of a stolen card being tested.",
+  amount_anomaly:
+    "This amount is far larger than anything this customer normally spends.",
+  card_country_mismatch:
+    "The card belongs to one country but was used from a different one.",
+  shared_ip_cluster:
+    "Several different accounts have used this same internet connection.",
+  serial_refund_claimant:
+    "This customer has asked for their money back several times before — and got it each time.",
+  elevated_dispute_rate:
+    "A large share of this customer's purchases end in a complaint.",
+  high_risk_merchant:
+    "This shop receives more complaints than a normal business does.",
+  immediate_dispute:
+    "The complaint was raised within an hour of paying.",
+};
+
+const PLAIN_DECISION = {
+  auto_refund: {
+    lamp: "LOW", icon: "✓",
+    headline: "Refund the customer",
+    because: "Nothing suspicious came up, so the money is going back automatically. No staff time needed.",
+  },
+  manual_review: {
+    lamp: "MEDIUM", icon: "✋",
+    headline: "Send this to a person",
+    because: "Something here needs human judgement. Nothing has been paid out — the case is waiting on a decision.",
+  },
+  reject_and_flag: {
+    lamp: "HIGH", icon: "✕",
+    headline: "Refuse the claim and alert the fraud team",
+    because: "The evidence points to fraud rather than a genuine complaint, so no money is being released.",
+  },
+};
+
+const PLAIN_AGENT = {
+  fetcher:        { role: "Evidence Collector", act: "Pulled together the payment, the shop, and the customer's history." },
+  threat_analyst: { role: "Fraud Checker",      act: "Ran the warning-sign checks and read the evidence." },
+  policy:         { role: "Rule Book",          act: "Applied the company's rules to reach a decision." },
+  action:         { role: "Case Handler",       act: "Carried out the decision." },
+  communicator:   { role: "Messenger",          act: "Wrote to the customer and the shop." },
+  human:          { role: "Human Reviewer",     act: "A person looked at the case and decided." },
+  orchestrator:   { role: "Supervisor",         act: "Closed the case." },
+};
+
+/* -------------------------------------------------------------------------- */
+
+async function loadHealth() {
+  try {
+    const h = await api("/health");
+    const llm = $("#llm"), mail = $("#mail");
+    const live = h.llm === "claude";
+    llm.textContent = live ? `llm · ${h.model}` : "llm · rules fallback";
+    llm.className = "pill " + (live ? "on" : "off");
+    mail.textContent = `mail · ${h.email_mode}`;
+    mail.className = "pill " + (h.email_mode === "smtp" ? "on" : "off");
+  } catch (e) { /* header is cosmetic */ }
+}
+
+async function loadDisputes() {
+  const box = $("#cases");
+  box.innerHTML = '<div class="empty"><span class="spin"></span></div>';
+  try {
+    const rows = await api("/disputes");
+    if (!rows.length) {
+      box.innerHTML = '<div class="empty">Nothing waiting.<br><small>python demo.py --reseed</small></div>';
+      return;
+    }
+    box.innerHTML = rows.map(d => `
+      <div class="case ${d.id === selected ? "active" : ""}" data-id="${esc(d.id)}">
+        <div class="${mode === "simple" ? "who" : "id"}">
+          ${mode === "simple"
+            ? esc(d.amount_display) + " complaint"
+            : esc(d.id)}
+        </div>
+        <div class="meta">
+          ${mode === "simple"
+            ? esc(d.reason_code.replaceAll("_", " ").toLowerCase())
+            : `<span class="amt">${esc(d.amount_display)}</span> · ${esc(d.reason_code.replaceAll("_", " ").toLowerCase())}`}
+        </div>
+        <div class="meta"><span class="badge ${esc(d.status)}">${esc(d.status.replaceAll("_", " "))}</span></div>
+      </div>`).join("");
+    box.querySelectorAll(".case").forEach(el =>
+      el.onclick = () => investigate(el.dataset.id));
+  } catch (e) {
+    box.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+  }
+}
+
+async function investigate(id) {
+  selected = id;
+  loadDisputes();
+  $("#detail").innerHTML = `<div class="empty"><span class="spin"></span>
+    <p>${mode === "simple"
+        ? "Checking the payment, the customer's history and the shop..."
+        : "Running Fetcher &rarr; Threat Analyst &rarr; Policy &rarr; Action &rarr; Communicator..."}</p></div>`;
+  try {
+    lastResult = await api(`/disputes/${encodeURIComponent(id)}/investigate`, { method: "POST" });
+    render();
+  } catch (e) {
+    $("#detail").innerHTML = `<div class="card"><div class="err">${esc(e.message)}</div></div>`;
+  }
+}
+
+async function decide(caseId, decision) {
+  const notes = $("#notes")?.value || "";
+  document.querySelectorAll(".review button").forEach(b => b.disabled = true);
+  try {
+    lastResult = await api(`/cases/${encodeURIComponent(caseId)}/decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision, notes, reviewer: "console.operator" }),
+    });
+    render();
+    loadDisputes();
+  } catch (e) {
+    $("#detail").insertAdjacentHTML("afterbegin",
+      `<div class="card"><div class="err">${esc(e.message)}</div></div>`);
+  }
+}
+
+function render() {
+  if (!lastResult) return;
+  if (lastResult.error) {
+    $("#detail").innerHTML = `<div class="card"><div class="err">${esc(lastResult.error)}</div></div>`;
+    return;
+  }
+  $("#detail").innerHTML = mode === "simple" ? renderSimple(lastResult) : renderTechnical(lastResult);
+}
+
+/* ---------- simple view ---------- */
+
+function reviewPanel(r, simple) {
+  if (r.status !== "awaiting_human") return "";
+  return `
+    <div class="card review">
+      <h3>${simple ? "Waiting for your decision" : "Graph paused — awaiting human review"}</h3>
+      <p style="margin:0 0 4px;color:var(--muted);font-size:14px">
+        ${simple
+          ? "No money has moved. The case is paused right here until someone decides."
+          : "Execution has genuinely halted before the <code>human_review</code> node and the state is checkpointed. Submitting a decision resumes the graph from exactly this point."}
+      </p>
+      <textarea id="notes" placeholder="${simple ? "Why did you decide this? (saved with the case)" : "Reviewer notes (recorded in the audit trail)"}"></textarea>
+      <div class="row">
+        <button class="primary ${simple ? "big" : ""}" onclick="decide('${esc(r.case_run_id)}','approve_refund')">
+          ${simple ? "Give the money back" : "Approve refund"}</button>
+        <button class="danger ${simple ? "big" : ""}" onclick="decide('${esc(r.case_run_id)}','reject')">
+          ${simple ? "Refuse the claim" : "Reject claim"}</button>
+      </div>
+    </div>`;
+}
+
+function renderSimple(r) {
+  const o = r.overview || {};
+  const d = PLAIN_DECISION[r.decision] || PLAIN_DECISION.manual_review;
+  const hits = (r.signals || []).filter(s => s.triggered);
+  const total = (r.signals || []).length;
+  const byHuman = r.decided_by === "human";
+
+  const warnings = hits.length
+    ? hits.map(s => `
+        <div class="check bad">
+          <span class="ic">&#9888;</span>
+          <span class="tx">${esc(PLAIN_SIGNAL[s.name] || s.rationale)}</span>
+        </div>`).join("")
+    : `<div class="allclear"><span style="font-size:18px">&#10003;</span>
+         <span>Every check passed. Nothing about this payment looks unusual.</span></div>`;
+
+  const steps = (r.trace || [])
+    .filter(s => PLAIN_AGENT[s.agent])
+    .filter((s, i, arr) => i === 0 || arr[i - 1].agent !== s.agent)  // one line per agent
+    .map((s, i) => {
+      const a = PLAIN_AGENT[s.agent];
+      return `<div class="who-did ${s.agent === "human" ? "human" : ""}">
+                <span class="num">${i + 1}</span>
+                <span><span class="role">${esc(a.role)}</span>
+                <span class="act">${esc(a.act)}</span></span>
+              </div>`;
+    }).join("");
+
+  const outcomes = [];
+  if (r.action_result?.ok && r.decision === "auto_refund") {
+    outcomes.push(["&#128176;", `${esc(o.amount_display || "The amount")} is on its way back to ${esc(o.customer_name || "the customer")}.`,
+                   "Usually lands within 5–7 working days."]);
+  }
+  if (r.action_result?.ok && r.decision === "reject_and_flag") {
+    outcomes.push(["&#128683;", "The claim was refused. No money was released.",
+                   "The customer can appeal within 15 days if they have more proof."]);
+  }
+  if (r.fraud_alert) {
+    outcomes.push(["&#128680;", "The fraud team was alerted straight away.",
+                   "They will freeze the card and look for other payments from the same source."]);
+  }
+  (r.notifications || []).forEach(n => {
+    outcomes.push(["&#9993;", `An email went to the ${esc(n.audience)}.`, esc(n.subject)]);
+  });
+
+  return `
+  <div class="simple">
+    <div class="card">
+      <div class="verdict-hero">
+        <div class="lamp ${d.lamp}">${d.icon}</div>
+        <div>
+          <div class="headline">${esc(d.headline)}</div>
+          <div class="because">${esc(d.because)}</div>
+          ${byHuman ? `<div class="because"><strong>A person made this call</strong>, not the system.</div>` : ""}
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>What happened</h3>
+      <div class="facts">
+        <div class="fact"><div class="lbl">Customer</div><div class="val">${esc(o.customer_name || "—")}</div></div>
+        <div class="fact"><div class="lbl">Paid to</div><div class="val">${esc(o.merchant_name || "—")}</div></div>
+        <div class="fact"><div class="lbl">Amount</div><div class="val">${esc(o.amount_display || "—")}</div></div>
+        <div class="fact"><div class="lbl">Paid on</div><div class="val">${esc(o.paid_on || "—")}</div></div>
+        <div class="fact"><div class="lbl">Paid from</div><div class="val">${esc(o.paid_from || "—")}</div></div>
+      </div>
+      <div style="margin-top:18px">
+        <blockquote>&ldquo;${esc(o.complaint || "")}&rdquo;
+          <span class="by">— ${esc(o.customer_name || "the customer")}, in their own words</span>
+        </blockquote>
+      </div>
+    </div>
+
+    ${reviewPanel(r, true)}
+
+    <div class="card">
+      <h3>${hits.length ? `What looked wrong (${hits.length})` : "What we checked"}</h3>
+      ${warnings}
+      ${hits.length && total ? `<div class="passed">The other ${total - hits.length} checks came back clean.</div>` : ""}
+      ${!hits.length && total ? `<div class="passed">All ${total} checks passed.</div>` : ""}
+    </div>
+
+    ${outcomes.length ? `<div class="card">
+      <h3>What happened next</h3>
+      ${outcomes.map(([ic, tx, sub]) => `
+        <div class="outcome"><span class="ic">${ic}</span>
+        <span class="tx">${tx}<small>${sub}</small></span></div>`).join("")}
+    </div>` : ""}
+
+    ${(r.notifications || []).length ? `<div class="card">
+      <h3>The messages we sent</h3>
+      ${r.notifications.map(n => `
+        <div class="mail">
+          <div class="to">To the ${esc(n.audience)} · ${esc(n.to || "")}</div>
+          <div class="sj">${esc(n.subject)}</div>
+          <pre>${esc(n.body)}</pre>
+        </div>`).join("")}
+    </div>` : ""}
+
+    <div class="card">
+      <h3>Who did the work</h3>
+      <div class="flow">${steps}</div>
+      <div class="note">
+        Five specialists handled this one after another, with no person involved
+        ${byHuman ? "until the case was handed over for a decision" : "at any point"}.
+        Every step was written down, so anyone can check later why this outcome was reached.
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- technical view ---------- */
+
+function renderTechnical(r) {
+  const band = r.risk_band || "LOW";
+  const adj = r.adjudication || {};
+
+  // Colour the verdict by the decision, not the band. On a guardrail case the
+  // score is LOW (green) while the outcome is manual_review (amber) -- colouring
+  // by band would hide precisely the override a reviewer needs to notice.
+  const verdictClass = { auto_refund: "LOW", manual_review: "MEDIUM",
+                         reject_and_flag: "HIGH" }[r.decision] || "LOW";
+
+  const signals = [...(r.signals || [])].sort(
+    (a, b) => (b.triggered - a.triggered) || (b.weight - a.weight));
+
+  return `
+    <div class="card">
+      <div class="score-row">
+        <div>
+          <div class="score ${band}">${r.risk_score ?? "--"}<small>/100</small></div>
+          <div class="kv">${esc(band)} risk band</div>
+        </div>
+        <div class="bar">
+          <div class="track"><div class="fill ${band}" style="width:${r.risk_score || 0}%"></div></div>
+          <div class="marks"><span>0</span><span>30 · auto-refund ceiling</span><span>70 · reject floor</span><span>100</span></div>
+        </div>
+        <div>
+          <div class="verdict ${verdictClass}">${esc((r.decision || "").replaceAll("_", " "))}</div>
+          <div class="kv">decided by ${esc(r.decided_by || "-")} · ${esc(r.dispute_id)}</div>
+          <div class="kv">typology: ${esc(adj.fraud_typology || "-")} · confidence ${adj.confidence ?? "-"}</div>
+        </div>
+      </div>
+    </div>
+
+    ${reviewPanel(r, false)}
+
+    <div class="card">
+      <h2>Analyst assessment</h2>
+      <div class="quote">${esc(adj.assessment || "-")}</div>
+      ${adj.dissent ? `<div class="dissent"><strong>Counter-argument:</strong> ${esc(adj.dissent)}</div>` : ""}
+      ${(adj.key_findings || []).length ? `<h2 style="margin-top:18px">Key findings</h2>
+        <ul class="plain">${adj.key_findings.map(f => `<li>${esc(f)}</li>`).join("")}</ul>` : ""}
+    </div>
+
+    <div class="card">
+      <h2>Risk signals — ${r.triggered_signals?.length || 0} of ${signals.length} triggered</h2>
+      <ul class="plain">
+        ${signals.map(s => `
+          <li class="sig ${s.triggered ? "hit" : "miss"}">
+            <div style="flex:1">
+              <span class="nm">${s.triggered ? "&#9679;" : "&#9675;"} ${esc(s.name)}</span>
+              <span class="why">${esc(s.rationale)}</span>
+            </div>
+            <span class="wt">${s.triggered ? "+" + s.weight : "0"}</span>
+          </li>`).join("")}
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Policy reasoning</h2>
+      <ul class="plain">${(r.decision_reasons || []).map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+    </div>
+
+    ${r.action_result ? `<div class="card">
+      <h2>Action executed</h2>
+      <ul class="plain">${Object.entries(r.action_result).map(([k, v]) =>
+        `<li><span class="sig"><span class="nm">${esc(k)}</span><span class="wt">${esc(JSON.stringify(v))}</span></span></li>`).join("")}</ul>
+      ${r.fraud_alert ? `<h2 style="margin-top:18px">Fraud alert raised</h2>
+        <ul class="plain">
+          <li>${esc(r.fraud_alert.alert_id)} — severity <strong class="HIGH">${esc(r.fraud_alert.severity)}</strong></li>
+          ${(r.fraud_alert.recommended_actions || []).map(a => `<li>${esc(a)}</li>`).join("")}
+        </ul>` : ""}
+    </div>` : ""}
+
+    ${(r.notifications || []).length ? `<div class="card">
+      <h2>Notifications sent</h2>
+      ${r.notifications.map(n => `
+        <div class="mail">
+          <div class="to">to ${esc(n.to || "-")} · ${esc(n.audience)} · ${esc(n.mode || "")} · drafted by ${esc(n.source || "-")}</div>
+          <div class="sj">${esc(n.subject)}</div>
+          <pre>${esc(n.body)}</pre>
+        </div>`).join("")}
+    </div>` : ""}
+
+    <div class="card">
+      <h2>Audit trail — ${(r.trace || []).length} steps</h2>
+      ${(r.trace || []).map(s => `
+        <div class="step">
+          <span class="n">${s.sequence ?? "-"}</span>
+          <span class="ag ${esc(s.agent)}">${esc(s.agent)}</span>
+          <span style="flex:1">${esc(s.step.replaceAll("_", " "))}</span>
+          <span class="tl">${s.tool ? esc(s.tool) : ""}${s.latency_ms ? " · " + s.latency_ms + "ms" : ""}</span>
+        </div>`).join("")}
+    </div>`;
+}
+
+/* ---------- wiring ---------- */
+
+function setMode(m) {
+  mode = m;
+  localStorage.setItem("view", m);
+  $("#btn-simple").className = m === "simple" ? "on" : "";
+  $("#btn-tech").className = m === "technical" ? "on" : "";
+  loadDisputes();
+  render();
+}
+
+$("#btn-simple").onclick = () => setMode("simple");
+$("#btn-tech").onclick = () => setMode("technical");
+$("#refresh").onclick = loadDisputes;
+
+setMode(mode);
+loadHealth();
+</script>
+</body>
+</html>

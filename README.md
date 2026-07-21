@@ -175,6 +175,25 @@ Messages get rendered to `./outbox/*.eml` so you can open one and read
 exactly what would have gone out. Real SMTP only turns on if you explicitly
 set `SMTP_ENABLED=true`.
 
+## Deploying it
+
+There's a `Dockerfile` and a `render.yaml` blueprint at the repo root. On
+[Render](https://render.com):
+
+1. New → Blueprint → pick this repo. Render reads `render.yaml` and builds
+   the Dockerfile automatically.
+2. `ANTHROPIC_API_KEY` is optional — leave it unset for the rules-fallback
+   path, or add it as a secret env var for Claude-written prose.
+3. First boot seeds the four demo scenarios automatically if the database
+   is empty (see the `lifespan` handler in `app/api/main.py`), so the deployed
+   instance is clickable immediately — nobody has to shell in and run a seed
+   script.
+
+Same Dockerfile works on Railway, Fly.io, or Hugging Face Spaces (Docker SDK)
+without changes. The SQLite file lives on the container's ephemeral disk, so
+a restart resets to a fresh copy of the four scenarios rather than losing
+anything that matters for a demo.
+
 ## The console
 
 One HTML file at `/`, no npm, no build step, no framework — it just talks to

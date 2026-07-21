@@ -30,8 +30,9 @@ from app.api.schemas import (
     InvestigationResponse,
 )
 from app.config import get_settings
-from app.db.models import AuditEvent, CaseRun, CaseStatus, Dispute
-from app.db.session import get_session, init_db
+from app.db.models import AuditEvent, CaseRun, CaseStatus, Dispute, Merchant
+from app.db.seed import seed
+from app.db.session import get_session, init_db, session_scope
 from app.tools.sql_tools import fetch_dispute, list_open_disputes
 
 settings = get_settings()
@@ -39,6 +40,12 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     init_db()
+    # First boot on a fresh deploy (empty DB, ephemeral disk) gets the four
+    # demo scenarios for free -- nobody has to shell in to seed it.
+    with session_scope() as session:
+        is_empty = session.query(Merchant).first() is None
+    if is_empty:
+        seed(reset=False)
     yield
 
 

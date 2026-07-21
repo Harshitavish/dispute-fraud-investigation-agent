@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: dispute-fraud-investigation-agent
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      # Optional. Without it the agents run on the deterministic rules
+      # fallback -- the full pipeline still works, just without
+      # Claude-written prose. Add it in the Render dashboard as a secret,
+      # never commit a real key here.
+      - key: ANTHROPIC_API_KEY
+        sync: false
